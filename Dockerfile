@@ -1,39 +1,18 @@
-FROM node:19-alpine AS base
+# base image
+FROM node:19-alpine
 
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
+# Create and change to the app directory.
+WORKDIR /usr/app
 
-COPY package*.json ./
-RUN npm ci
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copy application dependency manifests to the container image.
+# A wildcard is used to ensure copying both package.json AND package-lock.json (when available).
+# Copying this first prevents re-running npm install on every code change.
 COPY . .
 
-ENV NEXT_TELEMETRY_DISABLED 1
+# Install production dependencies.
+# If you add a package-lock.json, speed your build by switching to 'npm ci'.
+RUN npm ci --only=production
 
 RUN npm run build
-
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT 3000
 
 CMD ["npm", "start"]
